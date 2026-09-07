@@ -11,11 +11,9 @@ public class CustomerService : ICustomerService
 
     public async Task<List<Customer>> GetAll()
     {
-        var customers = await _context.Customers
+        return await _context.Customers
             .AsNoTracking()
             .ToListAsync();
-
-        return customers;
     }
 
     public async Task<Customer> GetById(int id)
@@ -26,14 +24,15 @@ public class CustomerService : ICustomerService
 
         if (customer is null)
         {
-            throw new Exception(
+            throw new CustomerNotFoundException(
                 $"Customer {id} was not found.");
         }
 
         return customer;
     }
 
-    public async Task<Customer> Create(CreateCustomerRequestDto dto)
+    public async Task<Customer> Create(
+        CreateCustomerRequestDto dto)
     {
         var customer = new Customer
         {

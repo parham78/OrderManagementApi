@@ -59,19 +59,25 @@ public class ProductService : IProductService
     }
     public async Task<Product?> UpdateStock(int id, int newStock)
     {
+        if (newStock < 0)
+        {
+            throw new BadRequestException(
+                "Stock cannot be negative.");
+        }
+
         var product = await _context.Products.FindAsync(id);
 
         if (product is null)
         {
-            return null;
+            throw new ProductNotFoundException(
+                $"Product {id} was not found.");
         }
-        // Console.WriteLine(_context.Entry(product).State);
-        product.Stock = newStock;
-        // Console.WriteLine(_context.Entry(product).State);
-        await _context.SaveChangesAsync();
-        return product;
 
-        // we'll continue here
+        product.Stock = newStock;
+
+        await _context.SaveChangesAsync();
+
+        return product;
     }
     public async Task<bool> Delete(int id)
     {
@@ -79,7 +85,8 @@ public class ProductService : IProductService
 
         if (product is null)
         {
-            return false;
+            throw new ProductNotFoundException(
+                $"Product {id} was not found.");
         }
 
         _context.Products.Remove(product);
