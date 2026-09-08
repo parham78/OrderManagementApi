@@ -7,6 +7,11 @@ public class Customer
     public string Email { get; set; } = string.Empty;
 
     public bool IsActive { get; set; }
+
+    public string? UserId { get; set; }
+
+    public ApplicationUser? User { get; set; }
+
     public ICollection<Order> Orders { get; set; }
-    = new List<Order>();
+        = new List<Order>();
 }

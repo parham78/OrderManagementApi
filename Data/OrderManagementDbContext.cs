@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
-public class OrderManagementDbContext : DbContext
+public class OrderManagementDbContext
+    : IdentityDbContext<ApplicationUser>
 {
     public DbSet<Product> Products { get; set; }
     public DbSet<Order> Orders { get; set; }
@@ -27,6 +29,11 @@ public class OrderManagementDbContext : DbContext
         modelBuilder.Entity<Customer>()
         .HasIndex(c => c.Email)
         .IsUnique();
+        modelBuilder.Entity<Customer>()
+    .HasOne(c => c.User)
+    .WithOne()
+    .HasForeignKey<Customer>(c => c.UserId)
+    .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Order>()
             .HasIndex(o => o.CustomerId);
