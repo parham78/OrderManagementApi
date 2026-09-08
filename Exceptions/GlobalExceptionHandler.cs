@@ -78,6 +78,17 @@ public class GlobalExceptionHandler : IExceptionHandler
 
             return true;
         }
+        if (exception is ConflictException)
+        {
+            httpContext.Response.StatusCode =
+                StatusCodes.Status409Conflict;
+
+            await httpContext.Response.WriteAsJsonAsync(
+                new { message = exception.Message },
+                cancellationToken);
+
+            return true;
+        }
 
         httpContext.Response.StatusCode =
             StatusCodes.Status500InternalServerError;

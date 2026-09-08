@@ -19,14 +19,10 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet("{id}")]
+
     public async Task<IActionResult> GetById(int id)
     {
         var product = await _productService.GetById(id);
-
-        if (product is null)
-        {
-            return NotFound(new { message = "Product not found" });
-        }
 
         return Ok(product);
     }
@@ -35,11 +31,6 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> GetByName(string name)
     {
         var product = await _productService.GetByName(name);
-
-        if (product is null)
-        {
-            return NotFound(new { message = "Product not found" });
-        }
 
         return Ok(product);
     }
@@ -68,17 +59,14 @@ public class ProductsController : ControllerBase
 
     [HttpPut("{id}/stock")]
     public async Task<IActionResult> UpdateStock(
-        int id,
-        int newStock)
+    int id,
+    [FromBody] UpdateStockRequestDto dto)
     {
+        var newStock = dto.NewStock
+            ?? throw new BadRequestException("NewStock is required.");
+
         var product =
             await _productService.UpdateStock(id, newStock);
-
-        if (product is null)
-        {
-            return NotFound(
-                new { message = "Product not found" });
-        }
 
         return Ok(product);
     }
@@ -86,14 +74,7 @@ public class ProductsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        bool result =
-            await _productService.Delete(id);
-
-        if (!result)
-        {
-            return NotFound(
-                new { message = "Product not found" });
-        }
+        await _productService.Delete(id);
 
         return NoContent();
     }

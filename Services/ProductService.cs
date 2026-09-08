@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 
 public class ProductService : IProductService
@@ -16,17 +17,32 @@ public class ProductService : IProductService
             .AsNoTracking()
             .ToListAsync();
     }
-    public async Task<Product?> GetById(int id)
+    public async Task<Product> GetById(int id)
     {
         var product = await _context.Products
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == id);
 
+        if (product is null)
+        {
+            throw new ProductNotFoundException(
+                $"Product {id} was not found.");
+        }
+
         return product;
     }
-    public async Task<Product?> GetByName(string name)
+    public async Task<Product> GetByName(string name)
     {
-        var product = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Name == name);
+        var product = await _context.Products
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Name == name);
+
+        if (product is null)
+        {
+            throw new ProductNotFoundException(
+                $"Product '{name}' was not found.");
+        }
+
         return product;
     }
     public async Task<List<Product>> GetExpensiveProducts(decimal minimumPrice)
@@ -57,7 +73,7 @@ public class ProductService : IProductService
         return product;
 
     }
-    public async Task<Product?> UpdateStock(int id, int newStock)
+    public async Task<Product> UpdateStock(int id, int newStock)
     {
         if (newStock < 0)
         {
@@ -75,11 +91,19 @@ public class ProductService : IProductService
 
         product.Stock = newStock;
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConcurrencyConflictException(
+                "The product was modified by another request. Reload it and try again.");
+        }
 
         return product;
     }
-    public async Task<bool> Delete(int id)
+    public async Task Delete(int id)
     {
         var product = await _context.Products.FindAsync(id);
 
@@ -91,9 +115,23 @@ public class ProductService : IProductService
 
         _context.Products.Remove(product);
 
-        await _context.SaveChangesAsync();
-
-        return true;
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConcurrencyConflictException(
+                "The product was modified or deleted by another request. Reload it and try again.");
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is SqlException sqlException
+            && sqlException.Number == 547)
+        {
+            throw new ConflictException(
+                "This product cannot be deleted because it is used in an order.",
+                ex);
+        }
     }
 
 }
