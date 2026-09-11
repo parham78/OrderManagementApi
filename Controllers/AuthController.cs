@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 [ApiController]
 [Route("api/auth")]
@@ -23,6 +24,31 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             message = "User registered successfully."
+        });
+    }
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(LoginRequestDto dto)
+    {
+        var result = await _authService.Login(dto);
+
+        if (result == null)
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid email or password."
+            });
+        }
+
+        return Ok(result);
+    }
+
+    [Authorize]
+    [HttpGet("protected")]
+    public IActionResult Protected()
+    {
+        return Ok(new
+        {
+            message = "You are authenticated."
         });
     }
 }

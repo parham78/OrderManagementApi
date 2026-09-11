@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -10,6 +13,35 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.Configure<JwtOptions>(
+    builder.Configuration.GetSection("Jwt"));
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        var jwtOptions =
+            builder.Configuration
+                .GetSection("Jwt")
+                .Get<JwtOptions>()!;
+
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = jwtOptions.Issuer,
+
+                ValidateAudience = true,
+                ValidAudience = jwtOptions.Audience,
+
+                ValidateLifetime = true,
+
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey =
+                    new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(jwtOptions.Key))
+            };
+    });
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 builder.Services.AddDbContext<OrderManagementDbContext>(options =>
     options.UseSqlServer(
@@ -47,6 +79,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // app.UseHttpsRedirection();
+app.UseAuthentication();
 
 app.UseAuthorization();
 
