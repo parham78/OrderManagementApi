@@ -6,10 +6,14 @@ using Microsoft.AspNetCore.Authorization;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public AuthController(IAuthService authService)
+    public AuthController(
+    IAuthService authService,
+    ICurrentUserService currentUserService)
     {
         _authService = authService;
+        _currentUserService = currentUserService;
     }
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequestDto dto)
@@ -49,6 +53,28 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             message = "You are authenticated."
+        });
+    }
+    [Authorize(Roles = AppRoles.Admin)]
+    [HttpGet("admin-only")]
+    public IActionResult AdminOnly()
+    {
+        return Ok(new
+        {
+            message = "You are an admin."
+        });
+    }
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> Me()
+    {
+        var userId = _currentUserService.GetUserId();
+        var customerId = await _currentUserService.GetCustomerId();
+
+        return Ok(new
+        {
+            userId,
+            customerId
         });
     }
 }

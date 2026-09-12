@@ -35,7 +35,7 @@ public class TokenService : ITokenService
         foreach (var role in roles)
         {
             claims.Add(
-                new Claim(ClaimTypes.Role, role));
+                new Claim("role", role));
         }
 
         var key = new SymmetricSecurityKey(

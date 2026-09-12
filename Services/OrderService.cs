@@ -3,11 +3,16 @@ using Microsoft.EntityFrameworkCore;
 public class OrderService : IOrderService
 {
     private readonly OrderManagementDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public OrderService(OrderManagementDbContext context)
+    public OrderService(
+        OrderManagementDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
+
 
     public async Task<PagedResultDto<OrderResponseDto>> GetAll(
         int page,
@@ -71,6 +76,130 @@ public class OrderService : IOrderService
         };
     }
 
+
+    public async Task<PagedResultDto<OrderResponseDto>> GetMyOrders(
+        int page,
+        int pageSize)
+    {
+        var customerId =
+            await _currentUserService.GetCustomerId();
+
+        if (customerId == null)
+        {
+            throw new CustomerNotFoundException(
+                "No customer profile is linked to the current user.");
+        }
+
+        if (page < 1)
+        {
+            page = 1;
+        }
+
+        if (pageSize < 1)
+        {
+            pageSize = 10;
+        }
+
+        if (pageSize > 100)
+        {
+            pageSize = 100;
+        }
+
+        var query = _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == customerId.Value);
+
+        var totalCount = await query.CountAsync();
+
+        var orders = await query
+            .OrderBy(o => o.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(o => new OrderResponseDto
+            {
+                Id = o.Id,
+                CustomerId = o.CustomerId,
+                CustomerName = o.Customer.Name,
+                TotalPrice = o.TotalPrice,
+                Status = o.Status,
+                CreatedAt = o.CreatedAt,
+
+                Items = o.OrderItems
+                    .Select(oi => new OrderItemResponseDto
+                    {
+                        Id = oi.Id,
+                        ProductId = oi.ProductId,
+                        ProductName = oi.Product.Name,
+                        Quantity = oi.Quantity,
+                        UnitPrice = oi.UnitPrice,
+                        LineTotal = oi.Quantity * oi.UnitPrice
+                    })
+                    .ToList()
+            })
+            .ToListAsync();
+
+        return new PagedResultDto<OrderResponseDto>
+        {
+            Items = orders,
+            CurrentPage = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = (int)Math.Ceiling(
+                totalCount / (double)pageSize)
+        };
+    }
+
+
+    public async Task<OrderResponseDto> GetMyOrderById(int id)
+    {
+        var customerId =
+            await _currentUserService.GetCustomerId();
+
+        if (customerId == null)
+        {
+            throw new CustomerNotFoundException(
+                "No customer profile is linked to the current user.");
+        }
+
+        var order = await _context.Orders
+            .AsNoTracking()
+            .Where(o =>
+                o.Id == id &&
+                o.CustomerId == customerId.Value)
+            .Select(o => new OrderResponseDto
+            {
+                Id = o.Id,
+                CustomerId = o.CustomerId,
+                CustomerName = o.Customer.Name,
+                TotalPrice = o.TotalPrice,
+                Status = o.Status,
+                CreatedAt = o.CreatedAt,
+
+                Items = o.OrderItems
+                    .Select(oi => new OrderItemResponseDto
+                    {
+                        Id = oi.Id,
+                        ProductId = oi.ProductId,
+                        ProductName = oi.Product.Name,
+                        Quantity = oi.Quantity,
+                        UnitPrice = oi.UnitPrice,
+                        LineTotal =
+                            oi.Quantity * oi.UnitPrice
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
+
+        if (order == null)
+        {
+            throw new OrderNotFoundException(
+                $"Order {id} was not found.");
+        }
+
+        return order;
+    }
+
+
     public async Task<OrderResponseDto> GetById(int id)
     {
         var order = await _context.Orders
@@ -108,6 +237,7 @@ public class OrderService : IOrderService
         return order;
     }
 
+
     public async Task<OrderResponseDto> Create(
         CreateOrderRequestDto dto)
     {
@@ -120,7 +250,46 @@ public class OrderService : IOrderService
                 $"Customer {dto.CustomerId} was not found.");
         }
 
-        var productIds = dto.Items
+        return await CreateForCustomer(
+            dto.CustomerId,
+            dto.Items);
+    }
+
+
+    public async Task<OrderResponseDto> CreateMyOrder(
+        CreateMyOrderRequestDto dto)
+    {
+        var customerId =
+    await _currentUserService.GetCustomerId();
+
+        if (customerId == null)
+        {
+            throw new CustomerNotFoundException(
+                "No customer profile is linked to the current user.");
+        }
+
+        var isActive = await _context.Customers
+            .AnyAsync(c =>
+                c.Id == customerId.Value &&
+                c.IsActive);
+
+        if (!isActive)
+        {
+            throw new BadRequestException(
+                "This customer account is inactive.");
+        }
+
+        return await CreateForCustomer(
+            customerId.Value,
+            dto.Items);
+    }
+
+
+    private async Task<OrderResponseDto> CreateForCustomer(
+        int customerId,
+        List<OrderItemRequestDto> items)
+    {
+        var productIds = items
             .Select(i => i.ProductId)
             .ToList();
 
@@ -134,7 +303,7 @@ public class OrderService : IOrderService
             .Where(p => productIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id);
 
-        foreach (var itemDto in dto.Items)
+        foreach (var itemDto in items)
         {
             if (!products.ContainsKey(itemDto.ProductId))
             {
@@ -145,14 +314,14 @@ public class OrderService : IOrderService
 
         var order = new Order
         {
-            CustomerId = dto.CustomerId,
+            CustomerId = customerId,
             Status = "Pending",
             CreatedAt = DateTime.UtcNow
         };
 
         decimal totalPrice = 0;
 
-        foreach (var itemDto in dto.Items)
+        foreach (var itemDto in items)
         {
             var product = products[itemDto.ProductId];
 
@@ -193,6 +362,7 @@ public class OrderService : IOrderService
 
         return await GetById(order.Id);
     }
+
 
     public async Task<OrderResponseDto> Update(
         int id,
@@ -316,6 +486,7 @@ public class OrderService : IOrderService
 
         return await GetById(order.Id);
     }
+
 
     public async Task Delete(int id)
     {

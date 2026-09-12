@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -15,17 +16,19 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var products = await _productService.GetAll();
+
         return Ok(products);
     }
 
-    [HttpGet("{id}")]
 
+    [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
         var product = await _productService.GetById(id);
 
         return Ok(product);
     }
+
 
     [HttpGet("name/{name}")]
     public async Task<IActionResult> GetByName(string name)
@@ -34,6 +37,7 @@ public class ProductsController : ControllerBase
 
         return Ok(product);
     }
+
 
     [HttpGet("expensive")]
     public async Task<IActionResult> GetExpensiveProducts(
@@ -45,7 +49,9 @@ public class ProductsController : ControllerBase
         return Ok(products);
     }
 
+
     [HttpPost]
+    [Authorize(Roles = AppRoles.Admin)]
     public async Task<IActionResult> Add(
         CreateProductRequestDto dto)
     {
@@ -57,13 +63,16 @@ public class ProductsController : ControllerBase
             product);
     }
 
+
     [HttpPut("{id}/stock")]
+    [Authorize(Roles = AppRoles.Admin)]
     public async Task<IActionResult> UpdateStock(
-    int id,
-    [FromBody] UpdateStockRequestDto dto)
+        int id,
+        [FromBody] UpdateStockRequestDto dto)
     {
         var newStock = dto.NewStock
-            ?? throw new BadRequestException("NewStock is required.");
+            ?? throw new BadRequestException(
+                "NewStock is required.");
 
         var product =
             await _productService.UpdateStock(id, newStock);
@@ -71,7 +80,9 @@ public class ProductsController : ControllerBase
         return Ok(product);
     }
 
+
     [HttpDelete("{id}")]
+    [Authorize(Roles = AppRoles.Admin)]
     public async Task<IActionResult> Delete(int id)
     {
         await _productService.Delete(id);

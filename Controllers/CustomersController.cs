@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = AppRoles.Admin)]
 public class CustomersController : ControllerBase
 {
     private readonly ICustomerService _customerService;
@@ -28,7 +30,8 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(CreateCustomerRequestDto dto)
+    public async Task<IActionResult> Create(
+        CreateCustomerRequestDto dto)
     {
         var customer = await _customerService.Create(dto);
 

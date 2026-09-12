@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -13,12 +14,15 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection("Jwt"));
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.MapInboundClaims = false;
+
         var jwtOptions =
             builder.Configuration
                 .GetSection("Jwt")
@@ -38,10 +42,14 @@ builder.Services
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey =
                     new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(jwtOptions.Key))
+                        Encoding.UTF8.GetBytes(jwtOptions.Key)),
+
+                NameClaimType = JwtRegisteredClaimNames.Sub,
+                RoleClaimType = "role"
             };
     });
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddDbContext<OrderManagementDbContext>(options =>
     options.UseSqlServer(
@@ -66,7 +74,14 @@ using (var scope = app.Services.CreateScope())
         scope.ServiceProvider
             .GetRequiredService<RoleManager<IdentityRole>>();
 
-    await IdentitySeeder.SeedRolesAsync(roleManager);
+    var userManager =
+        scope.ServiceProvider
+            .GetRequiredService<UserManager<ApplicationUser>>();
+
+    await IdentitySeeder.SeedRolesAndAdminAsync(
+        roleManager,
+        userManager,
+        app.Configuration);
 }
 
 app.UseExceptionHandler();
