@@ -11,10 +11,10 @@ public interface IOrderService
     CreateMyOrderRequestDto dto);
 
     Task<OrderResponseDto> GetById(int id);
-
     Task<OrderResponseDto> Create(CreateOrderRequestDto dto);
-
-    Task<OrderResponseDto> Update(int id, UpdateOrderRequestDto dto);
-
-    Task Delete(int id);
+    Task<OrderResponseDto> ChangeStatus(
+        int id,
+        ChangeOrderStatusRequestDto dto);
+    Task<OrderResponseDto> CancelOrder(int id);
+    Task<OrderResponseDto> CancelMyOrder(int id);
 }

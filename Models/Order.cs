@@ -6,7 +6,7 @@ public class Order
     public Customer Customer { get; set; } = null!;
 
     public decimal TotalPrice { get; set; }
-    public string Status { get; set; } = string.Empty;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
     public DateTime CreatedAt { get; set; }
 
     public List<OrderItem> OrderItems { get; set; } = [];

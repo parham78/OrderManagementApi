@@ -47,22 +47,23 @@ public class OrdersController : ControllerBase
         );
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateOrder(
-        int id,
-        UpdateOrderRequestDto dto)
+
+
+
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> ChangeStatus(
+    int id,
+    ChangeOrderStatusRequestDto dto)
     {
-        var order =
-            await _orderService.Update(id, dto);
+        var order = await _orderService.ChangeStatus(id, dto);
 
         return Ok(order);
     }
-
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteOrder(int id)
+    [HttpPatch("{id}/cancel")]
+    public async Task<IActionResult> CancelOrder(int id)
     {
-        await _orderService.Delete(id);
+        var order = await _orderService.CancelOrder(id);
 
-        return NoContent();
+        return Ok(order);
     }
 }

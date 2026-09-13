@@ -43,6 +43,10 @@ public class OrderManagementDbContext
             .Property(o => o.TotalPrice)
             .HasPrecision(18, 2);
 
+        modelBuilder.Entity<Order>()
+    .Property(o => o.Status)
+    .HasConversion<string>();
+
         // OrderItem historical price
         modelBuilder.Entity<OrderItem>()
             .Property(oi => oi.UnitPrice)

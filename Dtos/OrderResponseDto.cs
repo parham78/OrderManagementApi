@@ -7,7 +7,7 @@ public class OrderResponseDto
 
     public decimal TotalPrice { get; set; }
 
-    public string Status { get; set; } = string.Empty;
+    public OrderStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

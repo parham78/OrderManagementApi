@@ -56,7 +56,7 @@ public class OrderService : IOrderService
                     {
                         Id = oi.Id,
                         ProductId = oi.ProductId,
-                        ProductName = oi.Product.Name,
+                        ProductName = oi.ProductName,
                         Quantity = oi.Quantity,
                         UnitPrice = oi.UnitPrice,
                         LineTotal = oi.Quantity * oi.UnitPrice
@@ -129,7 +129,7 @@ public class OrderService : IOrderService
                     {
                         Id = oi.Id,
                         ProductId = oi.ProductId,
-                        ProductName = oi.Product.Name,
+                        ProductName = oi.ProductName,
                         Quantity = oi.Quantity,
                         UnitPrice = oi.UnitPrice,
                         LineTotal = oi.Quantity * oi.UnitPrice
@@ -180,11 +180,10 @@ public class OrderService : IOrderService
                     {
                         Id = oi.Id,
                         ProductId = oi.ProductId,
-                        ProductName = oi.Product.Name,
+                        ProductName = oi.ProductName,
                         Quantity = oi.Quantity,
                         UnitPrice = oi.UnitPrice,
-                        LineTotal =
-                            oi.Quantity * oi.UnitPrice
+                        LineTotal = oi.Quantity * oi.UnitPrice
                     })
                     .ToList()
             })
@@ -219,7 +218,7 @@ public class OrderService : IOrderService
                     {
                         Id = oi.Id,
                         ProductId = oi.ProductId,
-                        ProductName = oi.Product.Name,
+                        ProductName = oi.ProductName,
                         Quantity = oi.Quantity,
                         UnitPrice = oi.UnitPrice,
                         LineTotal = oi.Quantity * oi.UnitPrice
@@ -260,7 +259,7 @@ public class OrderService : IOrderService
         CreateMyOrderRequestDto dto)
     {
         var customerId =
-    await _currentUserService.GetCustomerId();
+            await _currentUserService.GetCustomerId();
 
         if (customerId == null)
         {
@@ -315,7 +314,7 @@ public class OrderService : IOrderService
         var order = new Order
         {
             CustomerId = customerId,
-            Status = "Pending",
+            Status = OrderStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -337,7 +336,8 @@ public class OrderService : IOrderService
             {
                 ProductId = product.Id,
                 Quantity = itemDto.Quantity,
-                UnitPrice = product.Price
+                UnitPrice = product.Price,
+                ProductName = product.Name
             };
 
             order.OrderItems.Add(orderItem);
@@ -364,140 +364,77 @@ public class OrderService : IOrderService
     }
 
 
-    public async Task<OrderResponseDto> Update(
+    private static bool IsValidStatusTransition(
+        OrderStatus currentStatus,
+        OrderStatus newStatus)
+    {
+        if (currentStatus == OrderStatus.Pending)
+        {
+            return newStatus == OrderStatus.Processing;
+        }
+
+        if (currentStatus == OrderStatus.Processing)
+        {
+            return newStatus == OrderStatus.Shipped;
+        }
+
+        if (currentStatus == OrderStatus.Shipped)
+        {
+            return newStatus == OrderStatus.Completed;
+        }
+
+        return false;
+    }
+
+
+    public async Task<OrderResponseDto> ChangeStatus(
         int id,
-        UpdateOrderRequestDto dto)
+        ChangeOrderStatusRequestDto dto)
     {
         var order = await _context.Orders
-            .Include(o => o.OrderItems)
             .FirstOrDefaultAsync(o => o.Id == id);
 
-        if (order is null)
+        if (order == null)
         {
             throw new OrderNotFoundException(
                 $"Order {id} was not found.");
         }
 
-        var customerExists = await _context.Customers
-            .AnyAsync(c => c.Id == dto.CustomerId);
+        var isValidTransition =
+            IsValidStatusTransition(
+                order.Status,
+                dto.Status);
 
-        if (!customerExists)
-        {
-            throw new CustomerNotFoundException(
-                $"Customer {dto.CustomerId} was not found.");
-        }
-
-        var newProductIds = dto.Items
-            .Select(i => i.ProductId)
-            .ToList();
-
-        if (newProductIds.Distinct().Count() != newProductIds.Count)
+        if (!isValidTransition)
         {
             throw new BadRequestException(
-                "The same product cannot appear twice in an order.");
+                $"Cannot change order status from {order.Status} to {dto.Status}.");
         }
 
-        // We need both:
-        // old products -> restore their stock
-        // new products -> subtract new quantities
-        var allProductIds = order.OrderItems
-            .Select(oi => oi.ProductId)
-            .Concat(newProductIds)
-            .Distinct()
-            .ToList();
+        order.Status = dto.Status;
 
-        var products = await _context.Products
-            .Where(p => allProductIds.Contains(p.Id))
-            .ToDictionaryAsync(p => p.Id);
-
-        // Validate products from the old order.
-        foreach (var oldItem in order.OrderItems)
-        {
-            if (!products.ContainsKey(oldItem.ProductId))
-            {
-                throw new ProductNotFoundException(
-                    $"Original product {oldItem.ProductId} was not found.");
-            }
-        }
-
-        // Validate products in the new request.
-        foreach (var itemDto in dto.Items)
-        {
-            if (!products.ContainsKey(itemDto.ProductId))
-            {
-                throw new ProductNotFoundException(
-                    $"Product {itemDto.ProductId} was not found.");
-            }
-        }
-
-        // Restore stock from the old order first.
-        foreach (var oldItem in order.OrderItems)
-        {
-            var oldProduct = products[oldItem.ProductId];
-
-            oldProduct.Stock += oldItem.Quantity;
-        }
-
-        var oldItems = order.OrderItems.ToList();
-
-        _context.OrderItems.RemoveRange(oldItems);
-
-        order.OrderItems.Clear();
-
-        decimal newTotalPrice = 0;
-
-        foreach (var itemDto in dto.Items)
-        {
-            var product = products[itemDto.ProductId];
-
-            if (product.Stock < itemDto.Quantity)
-            {
-                throw new InsufficientStockException(
-                    $"Not enough stock for product {product.Name}.");
-            }
-
-            product.Stock -= itemDto.Quantity;
-
-            var newOrderItem = new OrderItem
-            {
-                ProductId = product.Id,
-                Quantity = itemDto.Quantity,
-                UnitPrice = product.Price
-            };
-
-            order.OrderItems.Add(newOrderItem);
-
-            newTotalPrice +=
-                itemDto.Quantity * product.Price;
-        }
-
-        order.CustomerId = dto.CustomerId;
-        order.TotalPrice = newTotalPrice;
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            throw new ConcurrencyConflictException(
-                "One or more products were modified by another request.");
-        }
+        await _context.SaveChangesAsync();
 
         return await GetById(order.Id);
     }
 
 
-    public async Task Delete(int id)
+    public async Task<OrderResponseDto> CancelOrder(int id)
     {
         var order = await _context.Orders
             .Include(o => o.OrderItems)
             .FirstOrDefaultAsync(o => o.Id == id);
 
-        if (order is null)
+        if (order == null)
         {
             throw new OrderNotFoundException(
                 $"Order {id} was not found.");
+        }
+
+        if (order.Status != OrderStatus.Pending)
+        {
+            throw new BadRequestException(
+                "Only pending orders can be cancelled.");
         }
 
         var productIds = order.OrderItems
@@ -511,10 +448,9 @@ public class OrderService : IOrderService
 
         foreach (var item in order.OrderItems)
         {
-            var product = products.GetValueOrDefault(
-                item.ProductId);
-
-            if (product is null)
+            if (!products.TryGetValue(
+                item.ProductId,
+                out var product))
             {
                 throw new ProductNotFoundException(
                     $"Product {item.ProductId} was not found.");
@@ -523,7 +459,7 @@ public class OrderService : IOrderService
             product.Stock += item.Quantity;
         }
 
-        _context.Orders.Remove(order);
+        order.Status = OrderStatus.Cancelled;
 
         try
         {
@@ -532,7 +468,34 @@ public class OrderService : IOrderService
         catch (DbUpdateConcurrencyException)
         {
             throw new ConcurrencyConflictException(
-                "One or more products were modified by another request.");
+                "The order could not be cancelled because product stock changed. Please try again.");
         }
+
+        return await GetById(order.Id);
+    }
+    public async Task<OrderResponseDto> CancelMyOrder(int id)
+    {
+        var customerId =
+            await _currentUserService.GetCustomerId();
+
+        if (customerId == null)
+        {
+            throw new CustomerNotFoundException(
+                "No customer profile is linked to the current user.");
+        }
+
+        var order = await _context.Orders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o =>
+                o.Id == id &&
+                o.CustomerId == customerId.Value);
+
+        if (order == null)
+        {
+            throw new OrderNotFoundException(
+                $"Order {id} was not found.");
+        }
+
+        return await CancelOrder(id);
     }
 }

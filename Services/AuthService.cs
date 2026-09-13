@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 public class AuthService : IAuthService
 {
@@ -17,6 +18,19 @@ public class AuthService : IAuthService
     }
     public async Task<IdentityResult> Register(RegisterRequestDto dto)
     {
+        var customerEmailExists = await _context.Customers
+    .AnyAsync(c => c.Email == dto.Email);
+        if (customerEmailExists)
+        {
+            return IdentityResult.Failed(
+                new IdentityError
+                {
+                    Description = "An account with this email already exists."
+                });
+        }
+
+
+
         await using var transaction =
             await _context.Database.BeginTransactionAsync();
 

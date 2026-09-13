@@ -44,4 +44,12 @@ public class MeController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPatch("orders/{id}/cancel")]
+    public async Task<IActionResult> CancelMyOrder(int id)
+    {
+        var order = await _orderService.CancelMyOrder(id);
+
+        return Ok(order);
+    }
+
 }
